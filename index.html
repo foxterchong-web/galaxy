@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Galaxy Particle Display</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['Space Grotesk', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f5ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            900: '#0f172a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Scrollbar for Controls Drawer */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-btn:hover {
+            background: rgba(99, 102, 241, 0.25);
+            border-color: rgba(99, 102, 241, 0.5);
+            transform: translateY(-1px);
+        }
+        .glass-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Touch interaction optimizations */
+        canvas {
+            touch-action: none;
+        }
+
+        /* Custom Range Slider Styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #818cf8;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(129, 140, 248, 0.5);
+            transition: transform 0.1s ease, background-color 0.2s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #a5b4fc;
+        }
+
+        /* Pulsing Glow Effect */
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+        .animate-pulse-glow {
+            animation: pulseGlow 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full overflow-hidden select-none font-sans">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+        <canvas id="galaxy-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+    </div>
+
+    <!-- UI Overlay Layer -->
+    <div class="relative z-10 flex flex-col justify-between h-full pointer-events-none p-4 md:p-6">
+        
+        <!-- Top Bar: Title Badge -->
+        <header class="flex items-center justify-between pointer-events-auto">
+            <div class="flex items-center space-x-3 glass-panel px-4 py-2.5 rounded-2xl shadow-2xl">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid font-bold fa-atom text-white text-lg animate-spin" style="animation-duration: 12s;"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg tracking-wide text-white leading-none">Fox Galaxy World</h1>
+                    <p class="text-[10px] md:text-xs text-indigo-300 font-mono tracking-wider">GALAXY PARTICLE DISPLAY</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls Drawer Panel -->
+        <div id="controls-panel" class="pointer-events-auto absolute top-20 right-4 bottom-28 w-[calc(100%-2rem)] sm:w-80 lg:w-96 glass-panel rounded-2xl shadow-2xl flex flex-col transition-all duration-300 transform translate-x-[calc(100%+2rem)] border border-white/15 overflow-hidden z-20">
+            
+            <!-- Panel Header -->
+            <div class="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/40">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-sliders text-indigo-400 text-sm"></i>
+                    <h2 class="font-bold text-sm tracking-wide text-slate-100">GALAXY PARAMETERS</h2>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="btn-reset" class="text-xs text-slate-400 hover:text-indigo-300 transition-colors px-2 py-1 rounded bg-white/5 hover:bg-white/10">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                    </button>
+                    <button id="btn-close-panel" class="text-slate-400 hover:text-white p-1">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-white/10 text-xs font-medium bg-slate-950/40">
+                <button id="tab-btn-shape" onclick="switchTab('shape')" class="tab-btn active flex-1 py-2.5 text-center text-indigo-400 border-b-2 border-indigo-500 font-semibold transition-all">
+                    <i class="fa-solid fa-shapes mr-1"></i> Structure
+                </button>
+                <button id="tab-btn-color" onclick="switchTab('color')" class="tab-btn flex-1 py-2.5 text-center text-slate-400 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-palette mr-1"></i> Palette
+                </button>
+                <button id="tab-btn-motion" onclick="switchTab('motion')" class="tab-btn flex-1 py-2.5 text-center text-slate-400 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-person-running mr-1"></i> Dynamics
+                </button>
+            </div>
+
+            <!-- Tab Content Container -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+                
+                <!-- TAB 1: SHAPE & STRUCTURE -->
+                <div id="tab-content-shape" class="tab-content space-y-4">
+                    <!-- Particle Count Slider -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>PARTICLE COUNT</span>
+                            <span id="val-count" class="text-indigo-400 font-bold">50,000</span>
+                        </div>
+                        <input id="param-count" type="range" min="10000" max="150000" step="5000" value="50000" class="w-full">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                            <span>10k (Performance)</span>
+                            <span>150k (Dense)</span>
+                        </div>
+                    </div>
+
+                    <!-- Galaxy Radius -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>GALAXY RADIUS</span>
+                            <span id="val-radius" class="text-indigo-400 font-bold">5.0</span>
+                        </div>
+                        <input id="param-radius" type="range" min="1" max="10" step="0.2" value="5.0" class="w-full">
+                    </div>
+
+                    <!-- Arms / Branches -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>SPIRAL ARMS</span>
+                            <span id="val-branches" class="text-indigo-400 font-bold">4</span>
+                        </div>
+                        <input id="param-branches" type="range" min="2" max="12" step="1" value="4" class="w-full">
+                    </div>
+
+                    <!-- Spin Angle Twist -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>ARM SPIN / TWIST</span>
+                            <span id="val-spin" class="text-indigo-400 font-bold">1.2</span>
+                        </div>
+                        <input id="param-spin" type="range" min="-3" max="3" step="0.1" value="1.2" class="w-full">
+                    </div>
+
+                    <!-- Particle Dispersion / Randomness -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>CHAOS / DISPERSION</span>
+                            <span id="val-randomness" class="text-indigo-400 font-bold">0.5</span>
+                        </div>
+                        <input id="param-randomness" type="range" min="0.05" max="2.0" step="0.05" value="0.5" class="w-full">
+                    </div>
+
+                    <!-- Particle Size -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>PARTICLE SIZE</span>
+                            <span id="val-size" class="text-indigo-400 font-bold">0.015</span>
+                        </div>
+                        <input id="param-size" type="range" min="0.005" max="0.05" step="0.002" value="0.015" class="w-full">
+                    </div>
+                </div>
+
+                <!-- TAB 2: PALETTE & COLORS -->
+                <div id="tab-content-color" class="tab-content hidden space-y-4">
+                    <!-- Core Color -->
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+                        <div>
+                            <p class="font-mono font-semibold text-slate-200">CORE GLOW</p>
+                            <p class="text-[10px] text-slate-400">Dense center brightness color</p>
+                        </div>
+                        <input id="param-color-core" type="color" value="#ffffff" class="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0">
+                    </div>
+
+                    <!-- Inner Arm Color -->
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+                        <div>
+                            <p class="font-mono font-semibold text-slate-200">INNER SPIRAL</p>
+                            <p class="text-[10px] text-slate-400">Mid-radius star cluster hue</p>
+                        </div>
+                        <input id="param-color-inside" type="color" value="#ff6030" class="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0">
+                    </div>
+
+                    <!-- Outer Arm Color -->
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+                        <div>
+                            <p class="font-mono font-semibold text-slate-200">OUTER EDGES</p>
+                            <p class="text-[10px] text-slate-400">Peripheral halo tint</p>
+                        </div>
+                        <input id="param-color-outside" type="color" value="#1b3984" class="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0">
+                    </div>
+                </div>
+
+                <!-- TAB 3: MOTION & DYNAMICS -->
+                <div id="tab-content-motion" class="tab-content hidden space-y-4">
+                    <!-- Rotation Speed -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>ROTATION SPEED</span>
+                            <span id="val-speed" class="text-indigo-400 font-bold">0.3</span>
+                        </div>
+                        <input id="param-speed" type="range" min="0.0" max="1.5" step="0.05" value="0.3" class="w-full">
+                    </div>
+
+                    <!-- Core Vortex Pulse Speed -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>PULSE FREQUENCY</span>
+                            <span id="val-pulse" class="text-indigo-400 font-bold">1.0</span>
+                        </div>
+                        <input id="param-pulse" type="range" min="0.0" max="3.0" step="0.1" value="1.0" class="w-full">
+                    </div>
+
+                    <!-- Touch/Mouse Force Interaction -->
+                    <div>
+                        <div class="flex justify-between text-slate-300 mb-1 font-mono">
+                            <span>INTERACTION FORCE</span>
+                            <span id="val-force" class="text-indigo-400 font-bold">1.0</span>
+                        </div>
+                        <input id="param-force" type="range" min="0.0" max="3.0" step="0.1" value="1.0" class="w-full">
+                    </div>
+
+                    <!-- Auto-Tilt Wave Effect Toggle -->
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+                        <div>
+                            <p class="font-mono font-semibold text-slate-200">3D WAVE TILT</p>
+                            <p class="text-[10px] text-slate-400">Gentle undulating motion</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input id="param-wave" type="checkbox" checked class="sr-only peer">
+                            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Stats Info -->
+            <div class="p-3 border-t border-white/10 bg-slate-950/60 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                <span id="stats-fps"><i class="fa-solid fa-gauge-high text-indigo-400 mr-1"></i> FPS: --</span>
+                <span id="stats-[render-time]"><i class="fa-solid fa-cubes text-purple-400 mr-1"></i> Three.js WebGL</span>
+            </div>
+        </div>
+
+        <!-- Unified Bottom Control Bar -->
+        <div class="pointer-events-auto fixed bottom-3 left-1/2 -translate-x-1/2 z-30 w-[calc(100%-1.5rem)] max-w-4xl glass-panel p-2 sm:p-2.5 rounded-2xl md:rounded-3xl border border-white/15 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-2">
+            
+            <!-- Presets Cluster -->
+            <div class="flex items-center space-x-1.5 overflow-x-auto w-full md:w-auto max-w-full pb-1 md:pb-0 no-scrollbar px-1">
+                <span class="text-[10px] font-mono font-semibold text-slate-400 px-1 uppercase tracking-wider whitespace-nowrap hidden sm:inline-block"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-indigo-400"></i> Presets:</span>
+                <button onclick="applyPreset('milkyWay')" class="preset-btn px-2.5 py-1.5 rounded-xl text-xs font-medium glass-btn text-cyan-300 hover:text-white whitespace-nowrap flex items-center space-x-1">
+                    <span>🌌 Milky Way</span>
+                </button>
+                <button onclick="applyPreset('cyberpunk')" class="preset-btn px-2.5 py-1.5 rounded-xl text-xs font-medium glass-btn text-pink-400 hover:text-white whitespace-nowrap flex items-center space-x-1">
+                    <span>🔮 Cyber</span>
+                </button>
+                <button onclick="applyPreset('solar')" class="preset-btn px-2.5 py-1.5 rounded-xl text-xs font-medium glass-btn text-amber-300 hover:text-white whitespace-nowrap flex items-center space-x-1">
+                    <span>🔥 Solar</span>
+                </button>
+                <button onclick="applyPreset('quantum')" class="preset-btn px-2.5 py-1.5 rounded-xl text-xs font-medium glass-btn text-emerald-300 hover:text-white whitespace-nowrap flex items-center space-x-1">
+                    <span>⚡ Quantum</span>
+                </button>
+                <button onclick="applyPreset('blackHole')" class="preset-btn px-2.5 py-1.5 rounded-xl text-xs font-medium glass-btn text-purple-300 hover:text-white whitespace-nowrap flex items-center space-x-1">
+                    <span>🕳️ Vortex</span>
+                </button>
+            </div>
+
+            <!-- Divider -->
+            <div class="hidden md:block w-px h-6 bg-white/15"></div>
+            <div class="block md:hidden w-full h-px bg-white/10"></div>
+
+            <!-- Action & Tool Buttons -->
+            <div class="flex items-center justify-between md:justify-end space-x-2 w-full md:w-auto px-1">
+                <button id="btn-toggle-ui" class="glass-btn px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-300 hover:text-white flex items-center space-x-1.5 bg-indigo-500/20 border-indigo-500/40">
+                    <i class="fa-solid fa-sliders text-xs"></i>
+                    <span>Parameters</span>
+                </button>
+                
+                <button id="btn-reset-dock" onclick="document.getElementById('btn-reset').click()" class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white" title="Reset Galaxy">
+                    <i class="fa-solid fa-rotate-left text-xs"></i>
+                </button>
+
+                <button id="btn-zoom-in" class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white" title="Zoom In">
+                    <i class="fa-solid fa-magnifying-glass-plus text-xs"></i>
+                </button>
+
+                <button id="btn-zoom-out" class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white" title="Zoom Out">
+                    <i class="fa-solid fa-magnifying-glass-minus text-xs"></i>
+                </button>
+
+                <button id="btn-screenshot" class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white" title="Capture Snapshot">
+                    <i class="fa-solid fa-camera text-xs"></i>
+                </button>
+
+                <button id="btn-fullscreen" class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white" title="Toggle Fullscreen">
+                    <i class="fa-solid fa-expand text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-2xl border border-indigo-500/50 text-indigo-200 text-xs font-medium shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center space-x-2">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-indigo-400"></i>
+        <span id="toast-msg">Settings applied successfully!</span>
+    </div>
+
+    <script>
+        // Parameters Object holding system configuration
+        const parameters = {
+            count: 50000,
+            size: 0.015,
+            radius: 5.0,
+            branches: 4,
+            spin: 1.2,
+            randomness: 0.5,
+            randomnessPower: 3,
+            colorCore: '#ffffff',
+            colorInside: '#ff6030',
+            colorOutside: '#1b3984',
+            speed: 0.3,
+            pulseSpeed: 1.0,
+            interactionForce: 1.0,
+            waveEffect: true,
+            showPhone: true
+        };
+
+        // Presets Configuration
+        const presets = {
+            milkyWay: {
+                count: 60000,
+                size: 0.015,
+                radius: 5.5,
+                branches: 4,
+                spin: 1.2,
+                randomness: 0.45,
+                colorCore: '#ffffff',
+                colorInside: '#3b82f6',
+                colorOutside: '#1e1b4b',
+                speed: 0.25
+            },
+            cyberpunk: {
+                count: 80000,
+                size: 0.018,
+                radius: 4.8,
+                branches: 3,
+                spin: 2.1,
+                randomness: 0.35,
+                colorCore: '#00ffff',
+                colorInside: '#ec4899',
+                colorOutside: '#6366f1',
+                speed: 0.45
+            },
+            solar: {
+                count: 70000,
+                size: 0.02,
+                radius: 4.2,
+                branches: 5,
+                spin: 0.8,
+                randomness: 0.6,
+                colorCore: '#ffedd5',
+                colorInside: '#f97316',
+                colorOutside: '#7f1d1d',
+                speed: 0.5
+            },
+            quantum: {
+                count: 90000,
+                size: 0.012,
+                radius: 6.0,
+                branches: 8,
+                spin: 1.5,
+                randomness: 0.25,
+                colorCore: '#a7f3d0',
+                colorInside: '#10b981',
+                colorOutside: '#064e3b',
+                speed: 0.35
+            },
+            blackHole: {
+                count: 100000,
+                size: 0.014,
+                radius: 5.0,
+                branches: 2,
+                spin: 2.8,
+                randomness: 0.3,
+                colorCore: '#f43f5e',
+                colorInside: '#8b5cf6',
+                colorOutside: '#0f172a',
+                speed: 0.6
+            }
+        };
+
+        let scene, camera, renderer;
+        let geometry = null;
+        let material = null;
+        let points = null;
+        let phoneGroup = null;
+
+        // Interaction state variables
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let isMouseDown = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        
+        // Performance Monitoring
+        let frameCount = 0;
+        let lastFpsUpdate = performance.now();
+
+        // Canvas element
+        const canvas = document.getElementById('galaxy-canvas');
+
+        // Helper: Generate dynamic glow sprite texture for point particles
+        function createParticleTexture() {
+            const canvasTexture = document.createElement('canvas');
+            canvasTexture.width = 32;
+            canvasTexture.height = 32;
+            const ctx = canvasTexture.getContext('2d');
+
+            const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.25, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 32, 32);
+
+            const texture = new THREE.CanvasTexture(canvasTexture);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        const particleTexture = createParticleTexture();
+
+        function createPhoneFrame() {
+            if (phoneGroup) {
+                scene.remove(phoneGroup);
+            }
+
+            // 3D container group for galaxy rotation, wave tilt, and interaction dynamics
+            phoneGroup = new THREE.Group();
+            phoneGroup.rotation.x = Math.PI * 0.4; // 3D view perspective angle
+
+            scene.add(phoneGroup);
+        }
+
+        function generateGalaxy() {
+            // Clean up existing memory allocation
+            if (geometry !== null) {
+                geometry.dispose();
+                material.dispose();
+                scene.remove(points);
+            }
+
+            geometry = new THREE.BufferGeometry();
+
+            const positions = new Float32Array(parameters.count * 3);
+            const colors = new Float32Array(parameters.count * 3);
+            const scales = new Float32Array(parameters.count);
+
+            const colorCore = new THREE.Color(parameters.colorCore);
+            const colorInside = new THREE.Color(parameters.colorInside);
+            const colorOutside = new THREE.Color(parameters.colorOutside);
+            const tempColor = new THREE.Color(); // Pre-allocated instance to avoid GC churn
+
+            for (let i = 0; i < parameters.count; i++) {
+                // Particle Position Calculation along Spiral Arms
+                const i3 = i * 3;
+                const radius = Math.random() * parameters.radius;
+                const spinAngle = radius * parameters.spin;
+                const branchAngle = ((i % parameters.branches) / parameters.branches) * Math.PI * 2;
+
+                // Randomness dispersion calculation using power distribution for dense core
+                const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+
+                positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i3 + 1] = randomY * 0.5; // Slight vertical flattening
+                positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+                // Color Interpolation (Core -> Inner Arm -> Outer Fringe)
+                tempColor.copy(colorInside);
+                tempColor.lerp(colorOutside, radius / parameters.radius);
+
+                // Intense Core Blend
+                if (radius < parameters.radius * 0.2) {
+                    const coreFactor = 1 - (radius / (parameters.radius * 0.2));
+                    tempColor.lerp(colorCore, coreFactor);
+                }
+
+                colors[i3] = tempColor.r;
+                colors[i3 + 1] = tempColor.g;
+                colors[i3 + 2] = tempColor.b;
+
+                // Size variation attribute
+                scales[i] = Math.random();
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            // Custom Points Material with Additive Blending
+            material = new THREE.PointsMaterial({
+                size: parameters.size,
+                sizeAttenuation: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                vertexColors: true,
+                map: particleTexture,
+                transparent: true,
+                opacity: 0.85
+            });
+
+            points = new THREE.Points(geometry, material);
+            
+            if (phoneGroup) {
+                phoneGroup.add(points);
+            } else {
+                scene.add(points);
+            }
+        }
+
+        function initEngine() {
+            // Scene Setup
+            scene = new THREE.Scene();
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            // Position camera 50% closer to the galaxy on launch
+            camera.position.set(0, 1.25, 3.25);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer Setup (Optimized for performance and low memory effort)
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: false,
+                alpha: true,
+                stencil: false,
+                depth: false,
+                powerPreference: "high-performance",
+                preserveDrawingBuffer: true // Required for camera snapshots
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            // Initialize 3D Mobile Device Container & Galaxy
+            createPhoneFrame();
+            generateGalaxy();
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+
+            // Interaction Listeners (Touch & Mouse Navigation)
+            setupInteractions();
+        }
+
+        function setupInteractions() {
+            // Pointer Down
+            const onPointerDown = (e) => {
+                isMouseDown = true;
+                previousMousePosition = {
+                    x: e.clientX || (e.touches && e.touches[0].clientX) || 0,
+                    y: e.clientY || (e.touches && e.touches[0].clientY) || 0
+                };
+            };
+
+            // Pointer Move
+            const onPointerMove = (e) => {
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+
+                // Mouse coordinate normalized for dynamic particle attraction force
+                mouseX = (clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(clientY / window.innerHeight) * 2 + 1;
+
+                if (isMouseDown && phoneGroup) {
+                    const deltaX = clientX - previousMousePosition.x;
+                    const deltaY = clientY - previousMousePosition.y;
+
+                    phoneGroup.rotation.y += deltaX * 0.005 * parameters.interactionForce;
+                    phoneGroup.rotation.x += deltaY * 0.005 * parameters.interactionForce;
+
+                    previousMousePosition = { x: clientX, y: clientY };
+                }
+            };
+
+            // Pointer Up
+            const onPointerUp = () => {
+                isMouseDown = false;
+            };
+
+            // Zoom / Wheel interaction
+            const onWheel = (e) => {
+                camera.position.z += e.deltaY * 0.005;
+                camera.position.z = Math.max(1.5, Math.min(25, camera.position.z));
+            };
+
+            // Canvas touch and mouse event bindings
+            canvas.addEventListener('mousedown', onPointerDown);
+            canvas.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+
+            canvas.addEventListener('touchstart', onPointerDown, { passive: true });
+            canvas.addEventListener('touchmove', onPointerMove, { passive: true });
+            window.addEventListener('touchend', onPointerUp);
+
+            canvas.addEventListener('wheel', onWheel, { passive: true });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            // Galaxy Continuous Spin
+            if (points) {
+                points.rotation.y = elapsedTime * (parameters.speed * 0.2);
+            }
+
+            // Phone Container Subtle Undulation Wave Effect
+            if (phoneGroup && parameters.waveEffect && !isMouseDown) {
+                phoneGroup.rotation.z = Math.sin(elapsedTime * 0.5) * 0.08;
+                phoneGroup.position.y = Math.sin(elapsedTime * parameters.pulseSpeed) * 0.15;
+            }
+
+            // Pulse Core Particle Size dynamics
+            if (material) {
+                const pulse = Math.sin(elapsedTime * parameters.pulseSpeed * 2) * 0.003;
+                material.size = parameters.size + pulse;
+            }
+
+            // Render scene
+            renderer.render(scene, camera);
+
+            // FPS Counter Update
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime - lastFpsUpdate >= 1000) {
+                document.getElementById('stats-fps').innerHTML = `<i class="fa-solid fa-gauge-high text-indigo-400 mr-1"></i> FPS: ${frameCount}`;
+                frameCount = 0;
+                lastFpsUpdate = currentTime;
+            }
+        }
+
+        function bindControls() {
+            // Helper function for quick binding
+            // Mobile & Desktop Controls Panel Drawer Toggle
+            const controlsPanel = document.getElementById('controls-panel');
+            const toggleUiBtn = document.getElementById('btn-toggle-ui');
+            const closePanelBtn = document.getElementById('btn-close-panel');
+
+            toggleUiBtn.addEventListener('click', () => {
+                controlsPanel.classList.toggle('translate-x-0');
+                controlsPanel.classList.toggle('translate-x-[calc(100%+2rem)]');
+            });
+
+            closePanelBtn.addEventListener('click', () => {
+                controlsPanel.classList.remove('translate-x-0');
+                controlsPanel.classList.add('translate-x-[calc(100%+2rem)]');
+            });
+
+            const btnZoomIn = document.getElementById('btn-zoom-in');
+            const btnZoomOut = document.getElementById('btn-zoom-out');
+
+            if (btnZoomIn) {
+                btnZoomIn.addEventListener('click', () => {
+                    camera.position.z = Math.max(1.5, camera.position.z - 1.5);
+                });
+            }
+
+            if (btnZoomOut) {
+                btnZoomOut.addEventListener('click', () => {
+                    camera.position.z = Math.min(25, camera.position.z + 1.5);
+                });
+            }
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+                el.classList.add('text-slate-400');
+            });
+
+            // Active Tab UI
+            const activeContent = document.getElementById(`tab-content-${tabName}`);
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+
+            if (activeContent && activeBtn) {
+                activeContent.classList.remove('hidden');
+                activeBtn.classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+                activeBtn.classList.remove('text-slate-400');
+            }
+        }
+
+        function applyPreset(name) {
+            const preset = presets[name];
+            if (!preset) return;
+
+            Object.assign(parameters, preset);
+
+            // Synchronize UI Inputs
+            document.getElementById('param-count').value = parameters.count;
+            document.getElementById('val-count').textContent = parameters.count.toLocaleString();
+
+            document.getElementById('param-radius').value = parameters.radius;
+            document.getElementById('val-radius').textContent = parameters.radius;
+
+            document.getElementById('param-branches').value = parameters.branches;
+            document.getElementById('val-branches').textContent = parameters.branches;
+
+            document.getElementById('param-spin').value = parameters.spin;
+            document.getElementById('val-spin').textContent = parameters.spin;
+
+            document.getElementById('param-randomness').value = parameters.randomness;
+            document.getElementById('val-randomness').textContent = parameters.randomness;
+
+            document.getElementById('param-size').value = parameters.size;
+            document.getElementById('val-size').textContent = parameters.size;
+
+            document.getElementById('param-color-core').value = parameters.colorCore;
+            document.getElementById('param-color-inside').value = parameters.colorInside;
+            document.getElementById('param-color-outside').value = parameters.colorOutside;
+
+            document.getElementById('param-speed').value = parameters.speed;
+            document.getElementById('val-speed').textContent = parameters.speed;
+
+            generateGalaxy();
+            showToast(`Preset loaded: ${name.toUpperCase()}`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-msg');
+            toastMsg.textContent = msg;
+
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        window.onload = function() {
+            initEngine();
+            bindControls();
+            animate();
+        };
+    </script>
+</body>
+</html>
